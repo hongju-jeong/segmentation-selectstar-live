@@ -19,10 +19,28 @@ import math
 
 
 
+#임시 linestring 향후 linestring.txt 파싱 후
+linestring = [[127.08341510840815, 37.240436069188185] , #출발
+                [127.08341233624519, 37.24024442466403 ], #도로 인식 후 보행자도로 gps로 교체
+                [127.08212911848908, 37.24027217627202 ],
+                [127.08205412528905, 37.240272174930624 ],
+                [127.08013207664933, 37.24029713765783 ],
+                [127.07963767687961, 37.24030268372765 ],
+                [127.07956268360199, 37.24030545984253 ],
+                [127.07943769454693, 37.240319344887844 ],
+                [127.07924326470169, 37.240427662200275 ]]
+
+global current_point
+current_point = 0
 
 def gpsTracking():
     port = serial.Serial('/dev/ttyACM0', baudrate=460800, timeout=1)
     gps = UbloxGps(port)
+    
+    global g_lon                #다른 함수에서 받아올 현재 lon, lat
+    global g_lat
+    global current_point
+    global point_check
     point_check = 0
     with open('points.txt', 'r') as points:
         currentline = points.readline()
@@ -33,6 +51,8 @@ def gpsTracking():
                 print(coords.lon, coords.lat)
                 current_location_lon = coords.lon
                 current_location_lat = coords.lat
+                g_lon = current_location_lon
+                g_lat = current_location_lat
             except (ValueError, IOError) as err:
                 print(err) 
 
@@ -51,6 +71,7 @@ def gpsTracking():
             if (PTCdistance<=0.00001):
                 print(route_info)
                 point_check = 1
+                current_point+=1
             
     port.close()
 
@@ -68,7 +89,7 @@ NUM_CLASSES = 4  # including background
 CUDA = True if torch.cuda.is_available() else False
 
 MODE = 'jpg'  # 'mp4' or 'jpg'
-OVERLAPPING = False  # whether to mix segmentation map and original image
+OVERLAPPING = True  # whether to mix segmentation map and original image
 
 CUSTOM_COLOR_MAP = [
     [0, 0, 0],  # background
@@ -132,6 +153,8 @@ idx = np.array([320])
 
 road_way_count = 0 
 
+g_lon, g_lat = 127.08341510840815, 37.240436069188185      # 도로를 인식한 위치라 가정
+current_point = 1
 while True:
         ret, frame = capture.read()
 
@@ -158,6 +181,19 @@ while True:
             road_way_count+=1
 
         print(road_way_count)
+
+        if(road_way_count == 100):
+            imu = "South"                       # mqtt로 받아옴  , current_point = 1
+            if(imu == "South"):
+                direction = g_lon - linestring[current_point+1][0]
+                if(direction > 0):
+                    next_point_lon = g_lon - 0.00005      # green확인 후 이동
+                    next_point_lat = g_lat
+                    linestring.insert(current_point+1,[next_point_lon,next_point_lat])
+                    print(linestring)
+
+
+
 
         cv2.imshow('image', result[200:265,320:330])
         cv2.imshow('image2', result)
